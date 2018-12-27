@@ -1,11 +1,15 @@
 use crate::mem::{Mem, MemError, MemErrorVariant};
+use crate::oper::{Oper, OperCode};
+use rand::rngs::ThreadRng;
+use rand::Rng;
 use std::ops::Bound::*;
 use std::ops::RangeBounds;
 use std::slice::SliceIndex;
 
 const MEM_SIZE: usize = 4096_usize;
+const REG_SIZE: usize = 16_usize;
 
-/// 
+///
 /// Main emulator structure
 ///
 /// # Example
@@ -33,21 +37,118 @@ const MEM_SIZE: usize = 4096_usize;
 ///
 pub struct Emu {
     mem: [u8; MEM_SIZE],
+    reg: [u8; REG_SIZE],
+    ind: u16,
+    cnt: u16,
+    rng: ThreadRng,
+    dtm: u8,
+    stm: u8,
 }
 
 impl Emu {
-    /// 
+    ///
     /// Returns a new Emu instance
     ///
     /// # Example
     ///
     /// ```
     /// use rc201_8::emu::Emu;
+    ///
     /// let mut emu = Emu::new();
     /// ```
     ///
     pub fn new() -> Emu {
-        Emu { mem: [0; MEM_SIZE] }
+        Emu {
+            mem: [0; MEM_SIZE],
+            reg: [0; REG_SIZE],
+            ind: 0,
+            cnt: 0,
+            rng: rand::thread_rng(),
+            dtm: 0,
+            stm: 0,
+        }
+    }
+
+    ///
+    /// Executes an operation from a given code
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rc201_8::emu::Emu;
+    ///
+    /// let mut emu = Emu::new();
+    ///
+    /// emu.recv_opcode(&(0x00E0 as u16));
+    /// ```
+    ///
+    pub fn recv_opcode(&mut self, code: &u16) {
+        match Oper::from_code(code, &REG_SIZE) {
+            OperCode::Display00E0 => {}
+            OperCode::Flow00EE => {}
+            OperCode::Flow1NNN(v) => {
+                self.cnt = v;
+            }
+            OperCode::Flow2NNN(_) => {}
+            OperCode::Cond3XNN(_, _) => {}
+            OperCode::Cond4XNN(_, _) => {}
+            OperCode::Cond5XY0(_, _) => {}
+            OperCode::Const6XNN(x, v) => {
+                self.reg[x] = v;
+            }
+            OperCode::Const7XNN(x, v) => {
+                self.reg[x] = self.reg[x] + v;
+            }
+            OperCode::Assign8XY0(x, y) => {
+                self.reg[x] = self.reg[y];
+            }
+            OperCode::BitOp8XY1(x, y) => {
+                self.reg[x] = self.reg[x] | self.reg[y];
+            }
+            OperCode::BitOp8XY2(x, y) => {
+                self.reg[x] = self.reg[x] & self.reg[y];
+            }
+            OperCode::BitOp8XY3(x, y) => {
+                self.reg[x] = self.reg[x] ^ self.reg[y];
+            }
+            OperCode::Math8XY4(_, _) => {}
+            OperCode::Math8XY5(_, _) => {}
+            OperCode::BitOp8XY6(_, _) => {}
+            OperCode::Math8XY7(_, _) => {}
+            OperCode::BitOp8XYE(_, _) => {}
+            OperCode::Cond9XY0(_, _) => {}
+            OperCode::MemANNN(v) => {
+                self.ind = v;
+            }
+            OperCode::FlowBNNN(v) => {
+                self.cnt = v + self.reg[0] as u16;
+            }
+            OperCode::RandCXNN(x, v) => {
+                let r: u8 = self.rng.gen_range(0, 255);
+                self.reg[x] = r & v;
+            }
+            OperCode::DisplayDXYN(_, _, _) => {}
+            OperCode::KeyOpEX9E(_) => {}
+            OperCode::KeyOpEXA1(_) => {}
+            OperCode::TimerFX07(x) => {
+                self.reg[x] = self.dtm;
+            }
+            OperCode::KeyOpFX0A(_) => {}
+            OperCode::TimerFX15(x) => {
+                self.dtm = self.reg[x];
+            }
+            OperCode::SoundFX18(x) => {
+                self.stm = self.reg[x];
+            }
+            OperCode::MemFX1E(x) => {
+                self.ind = self.ind + self.reg[x] as u16;
+            }
+            OperCode::MemFX29(_) => {}
+            OperCode::BcdFX33(_) => {}
+            OperCode::MemFX55(_) => {}
+            OperCode::MemFX65(_) => {}
+            OperCode::Unknown => {}
+        }
     }
 }
 
@@ -56,12 +157,17 @@ impl Mem for Emu {
     fn max_size(&self) -> usize {
         MEM_SIZE
     }
-    
+
+    /// Validates if a given index belongs to the memory range
+    fn validate_index(&self, index: &usize) -> bool {
+        index < &self.max_size()
+    }
+
     /// Returns a tuple (start, end) for a given range
     fn range_get_start_end<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(
         &self,
         range: T,
-    ) -> (usize, usize) {
+    ) -> Result<(usize, usize), MemError> {
         let start = match range.start_bound() {
             Included(i) => i.clone(),
             Excluded(i) => i + 1,
@@ -69,21 +175,24 @@ impl Mem for Emu {
         };
         let end = match range.end_bound() {
             Included(i) => i.clone(),
-            Excluded(i) => i + 1,
+            Excluded(i) => i.clone(),
             Unbounded => self.max_size(),
         };
-        (start, end)
+        if self.validate_index(&start) && self.validate_index(&(end - 1)) {
+            Ok((start, end))
+        } else {
+            Err(MemError::new(MemErrorVariant::AccessRangeViolation(
+                start, end,
+            )))
+        }
     }
-    
-    /// Validates if a given index belongs to the memory range
-    fn validate_index(&self, index: &usize) -> bool {
-        index >= &0 && index < &MEM_SIZE
-    }
-    
+
     /// Validates if a given range belongs to the memory range
     fn validate_range<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(&self, range: T) -> bool {
-        let (start, end) = self.range_get_start_end(range);
-        start < MEM_SIZE && end <= MEM_SIZE + 1 && end >= start
+        match self.range_get_start_end(range) {
+            Ok((start, end)) => end > start,
+            _ => false,
+        }
     }
 
     /// Get the memory content of a given index
@@ -114,11 +223,9 @@ impl Mem for Emu {
         &self,
         range: T,
     ) -> Result<&<T as SliceIndex<[u8]>>::Output, MemError> {
-        if self.validate_range(range.clone()) {
-            Ok(&self.mem[range])
-        } else {
-            let (s, e) = self.range_get_start_end(range);
-            Err(MemError::new(MemErrorVariant::AccessRangeViolation(s, e)))
+        match self.range_get_start_end(range.clone()) {
+            Ok(_) => Ok(&self.mem[range]),
+            Err(e) => Err(e),
         }
     }
 
@@ -128,25 +235,14 @@ impl Mem for Emu {
         range: T,
         slice: &[u8],
     ) -> Result<(), MemError> {
-        let start = match range.start_bound() {
-            Included(i) => i.clone(),
-            Excluded(i) => i + 1,
-            Unbounded => 0,
-        };
-        let end = match range.end_bound() {
-            Included(i) => i.clone(),
-            Excluded(i) => i + 1,
-            Unbounded => 0,
-        };
-        if start < MEM_SIZE && end <= MEM_SIZE + 1 && end >= start {
-            for (i, v) in slice.iter().enumerate() {
-                self.mem[start + i] = v.clone();
+        match self.range_get_start_end(range.clone()) {
+            Ok((start, _)) => {
+                for (i, v) in slice.iter().enumerate() {
+                    self.mem[start + i] = v.clone();
+                }
+                Ok(())
             }
-            Ok(())
-        } else {
-            Err(MemError::new(MemErrorVariant::AccessRangeViolation(
-                start, end,
-            )))
+            Err(e) => Err(e),
         }
     }
 }

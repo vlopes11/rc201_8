@@ -2,7 +2,7 @@ use std::fmt;
 use std::ops::RangeBounds;
 use std::slice::SliceIndex;
 
-/// 
+///
 /// Encapsulation of memory interactions
 ///
 pub trait Mem {
@@ -22,26 +22,7 @@ pub trait Mem {
     ///
     fn max_size(&self) -> usize;
 
-    /// 
-    /// Returns a tuple (start, end) for a given range
     ///
-    /// # Example
-    ///
-    /// ```
-    /// use rc201_8::emu::Emu;
-    /// use rc201_8::mem::Mem;
-    ///
-    /// let emu = Emu::new();
-    ///
-    /// println!("The begining and end of this range is {:?}", emu.range_get_start_end(..));
-    /// ```
-    ///
-    fn range_get_start_end<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(
-        &self,
-        range: T,
-    ) -> (usize, usize);
-
-    /// 
     /// Validates if a given index belongs to the memory range
     ///
     /// # Example
@@ -64,6 +45,25 @@ pub trait Mem {
     fn validate_index(&self, index: &usize) -> bool;
 
     ///
+    /// Returns a tuple (start, end) for a given range
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rc201_8::emu::Emu;
+    /// use rc201_8::mem::Mem;
+    ///
+    /// let emu = Emu::new();
+    ///
+    /// println!("The begining and end of this range is {:?}", emu.range_get_start_end(..).unwrap());
+    /// ```
+    ///
+    fn range_get_start_end<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(
+        &self,
+        range: T,
+    ) -> Result<(usize, usize), MemError>;
+
+    ///
     /// Validates if a given range belongs to the memory range
     ///
     /// # Example
@@ -84,7 +84,7 @@ pub trait Mem {
     ///
     fn validate_range<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(&self, range: T) -> bool;
 
-    /// 
+    ///
     /// Get the memory content of a given index
     ///
     /// # Example
@@ -100,7 +100,7 @@ pub trait Mem {
     ///
     fn mem_get(&self, index: &usize) -> Result<&u8, MemError>;
 
-    /// 
+    ///
     /// Put a given value in a given index of the memory range
     ///
     /// # Example
@@ -187,7 +187,7 @@ impl fmt::Display for MemErrorVariant {
     }
 }
 
-/// 
+///
 /// Memory errors implementation
 ///
 pub struct MemError {
@@ -196,7 +196,7 @@ pub struct MemError {
 }
 
 impl MemError {
-    /// 
+    ///
     /// Returns a new MemError instance
     ///
     /// # Example
