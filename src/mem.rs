@@ -14,8 +14,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     ///
     /// assert_eq!(emu.max_size(), 4096);
     /// ```
@@ -30,8 +31,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     /// let index = 15000;
     ///
     /// assert!(! emu.validate_index(&index));
@@ -49,8 +51,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     ///
     /// assert_eq!(emu.range_get_start_end(..).unwrap(), (0, 4096));
     /// ```
@@ -68,8 +71,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     ///
     /// assert!(! emu.validate_range(..15000));
     /// ```
@@ -84,8 +88,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     ///
     /// assert_eq!(emu.mem_get(&2_usize).unwrap(), &0_u8);
     /// ```
@@ -100,8 +105,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let mut emu = Emu::new();
+    /// let mut emu = Emu::new(DisplayDummy::new());
     /// let index = 15;
     /// let value = 25;
     ///
@@ -119,8 +125,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let mut emu = Emu::new();
+    /// let emu = Emu::new(DisplayDummy::new());
     ///
     /// // Full memory slice ]..[
     /// assert_eq!(emu.mem_read(..).unwrap().len(), 4096);
@@ -151,8 +158,9 @@ pub trait Mem {
     /// ```
     /// use rc201_8::emu::Emu;
     /// use rc201_8::mem::Mem;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let mut emu = Emu::new();
+    /// let mut emu = Emu::new(DisplayDummy::new());
     ///
     /// emu.mem_write(4090..4096, &[3, 4]).unwrap();
     /// assert_eq!(emu.mem_get(&4090_usize).unwrap(), &3_u8);

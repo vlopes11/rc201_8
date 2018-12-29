@@ -1,6 +1,7 @@
 use crate::mem::{Mem, MemError, MemErrorVariant};
 use crate::oper::{Oper, OperCode};
 use crate::keypad::{Keypad, Key};
+use crate::display::{Display, DisplayEmu, DisplayDummy};
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::ops::Bound::*;
@@ -20,9 +21,10 @@ const KEY_SIZE: usize = 16_usize;
 /// ```
 /// use rc201_8::emu::Emu;
 /// use rc201_8::mem::{Mem, MemError};
+/// use rc201_8::display::{Display, DisplayDummy};
 ///
 /// fn try_main() -> Result<(), MemError> {
-///     let mut emu = Emu::new();
+///     let mut emu = Emu::new(DisplayDummy::new());
 ///     emu.mem_put(&0, 1).unwrap();
 ///     emu.mem_write(4090..4096, &[3, 4]).unwrap();
 ///     emu.mem_write(0..1, &[3]).unwrap();
@@ -38,7 +40,7 @@ const KEY_SIZE: usize = 16_usize;
 /// }
 /// ```
 ///
-pub struct Emu {
+pub struct Emu<D: Display + Sized> {
     /// Internal memory
     mem: [u8; MEM_SIZE],
 
@@ -67,10 +69,13 @@ pub struct Emu {
     spt: usize,
     
     /// Keypad
-    key: [u8; KEY_SIZE]
+    key: [u8; KEY_SIZE],
+    
+    /// Display
+    dsp: D,
 }
 
-impl Emu {
+impl<D: Display + Sized> Emu<D> {
     ///
     /// Returns a new Emu instance
     ///
@@ -78,11 +83,12 @@ impl Emu {
     ///
     /// ```
     /// use rc201_8::emu::Emu;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let mut emu = Emu::new();
+    /// let mut emu = Emu::new(DisplayDummy::new());
     /// ```
     ///
-    pub fn new() -> Emu {
+    pub fn new(display: D) -> Emu<D> {
         Emu {
             mem: [0; MEM_SIZE],
             reg: [0; REG_SIZE],
@@ -94,6 +100,7 @@ impl Emu {
             stk: [0; STK_SIZE],
             spt: 0,
             key: [0; KEY_SIZE],
+            dsp: display,
         }
     }
 
@@ -104,8 +111,9 @@ impl Emu {
     ///
     /// ```
     /// use rc201_8::emu::Emu;
+    /// use rc201_8::display::{Display, DisplayDummy};
     ///
-    /// let mut emu = Emu::new();
+    /// let mut emu = Emu::new(DisplayDummy::new());
     ///
     /// // Clear the display
     /// emu.recv_opcode(&(0x00E0 as u16));
@@ -181,7 +189,7 @@ impl Emu {
     }
 }
 
-impl Mem for Emu {
+impl<D: Display + Sized> Mem for Emu<D> {
     /// Returns the maximum memory size
     fn max_size(&self) -> usize {
         MEM_SIZE
@@ -276,9 +284,15 @@ impl Mem for Emu {
     }
 }
 
-impl Keypad for Emu {
+impl<D: Display + Sized> Keypad for Emu<D> {
     fn key_pressed(&self, _key: &Key) -> bool {
         // TODO
         false
+    }
+}
+
+impl<D: Display + Sized> DisplayEmu<D> for Emu<D> {
+    fn set_display(&mut self, display: D) {
+        self.dsp = display;
     }
 }
