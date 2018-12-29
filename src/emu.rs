@@ -1,5 +1,6 @@
 use crate::mem::{Mem, MemError, MemErrorVariant};
 use crate::oper::{Oper, OperCode};
+use crate::keypad::{Keypad, Key};
 use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::ops::Bound::*;
@@ -8,6 +9,8 @@ use std::slice::SliceIndex;
 
 const MEM_SIZE: usize = 4096_usize;
 const REG_SIZE: usize = 16_usize;
+const STK_SIZE: usize = 16_usize;
+const KEY_SIZE: usize = 16_usize;
 
 ///
 /// Main emulator structure
@@ -56,6 +59,15 @@ pub struct Emu {
 
     /// Sound timer
     stm: u8,
+    
+    /// Call stack
+    stk: [u16; STK_SIZE],
+    
+    /// Stack pointer
+    spt: usize,
+    
+    /// Keypad
+    key: [u8; KEY_SIZE]
 }
 
 impl Emu {
@@ -79,6 +91,9 @@ impl Emu {
             rng: rand::thread_rng(),
             dtm: 0,
             stm: 0,
+            stk: [0; STK_SIZE],
+            spt: 0,
+            key: [0; KEY_SIZE],
         }
     }
 
@@ -258,5 +273,12 @@ impl Mem for Emu {
             }
             Err(e) => Err(e),
         }
+    }
+}
+
+impl Keypad for Emu {
+    fn key_pressed(&self, _key: &Key) -> bool {
+        // TODO
+        false
     }
 }
