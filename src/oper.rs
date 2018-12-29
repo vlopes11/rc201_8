@@ -204,7 +204,8 @@ pub enum OperCode {
 pub struct Oper {}
 
 impl Oper {
-    /// Returns enum OperCode from a given code
+    /// Returns enum OperCode from a given code and
+    /// the registers capacity (typically 16)
     pub fn from_code(code: &u16, rsize: &usize) -> OperCode {
         let a = (code & 0xF000) >> 12;
         let b = (code & 0x0F00) >> 08;

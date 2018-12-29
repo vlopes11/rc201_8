@@ -17,7 +17,7 @@ pub trait Mem {
     ///
     /// let emu = Emu::new();
     ///
-    /// println!("The number of memory slots is {}", emu.max_size());
+    /// assert_eq!(emu.max_size(), 4096);
     /// ```
     ///
     fn max_size(&self) -> usize;
@@ -34,18 +34,15 @@ pub trait Mem {
     /// let emu = Emu::new();
     /// let index = 15000;
     ///
-    /// if emu.validate_index(&index) {
-    ///     println!("{} belongs to the memory range", index);
-    /// }
-    /// else {
-    ///     println!("{} dont belongs to the memory range", index);
-    /// }
+    /// assert!(! emu.validate_index(&index));
     /// ```
     ///
     fn validate_index(&self, index: &usize) -> bool;
 
     ///
     /// Returns a tuple (start, end) for a given range
+    ///
+    /// End will be the last index + 1
     ///
     /// # Example
     ///
@@ -55,7 +52,7 @@ pub trait Mem {
     ///
     /// let emu = Emu::new();
     ///
-    /// println!("The begining and end of this range is {:?}", emu.range_get_start_end(..).unwrap());
+    /// assert_eq!(emu.range_get_start_end(..).unwrap(), (0, 4096));
     /// ```
     ///
     fn range_get_start_end<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(
@@ -74,12 +71,7 @@ pub trait Mem {
     ///
     /// let emu = Emu::new();
     ///
-    /// if emu.validate_range(..15000) {
-    ///     println!("The given range belongs to the memory range");
-    /// }
-    /// else {
-    ///     println!("The given range dont belongs to the memory range");
-    /// }
+    /// assert!(! emu.validate_range(..15000));
     /// ```
     ///
     fn validate_range<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(&self, range: T) -> bool;
@@ -95,7 +87,7 @@ pub trait Mem {
     ///
     /// let emu = Emu::new();
     ///
-    /// println!("{}", emu.mem_get(&2).unwrap());
+    /// assert_eq!(emu.mem_get(&2_usize).unwrap(), &0_u8);
     /// ```
     ///
     fn mem_get(&self, index: &usize) -> Result<&u8, MemError>;
@@ -114,7 +106,7 @@ pub trait Mem {
     /// let value = 25;
     ///
     /// emu.mem_put(&index, value).unwrap();
-    /// println!("{}", emu.mem_get(&index).unwrap());
+    /// assert_eq!(emu.mem_get(&index).unwrap(), &25_u8);
     /// ```
     ///
     fn mem_put(&mut self, index: &usize, value: u8) -> Result<(), MemError>;
@@ -130,10 +122,17 @@ pub trait Mem {
     ///
     /// let mut emu = Emu::new();
     ///
-    /// println!("Full memory slice - {:?}", emu.mem_read(..).unwrap());
-    /// println!("First 3 members - {:?}", emu.mem_read(..3).unwrap());
-    /// println!("From the 3rd member to the end - {:?}", emu.mem_read(3..).unwrap());
-    /// println!("Partial slice - {:?}", emu.mem_read(25..37).unwrap());
+    /// // Full memory slice ]..[
+    /// assert_eq!(emu.mem_read(..).unwrap().len(), 4096);
+    /// 
+    /// // First 3 members [0-2]
+    /// assert_eq!(emu.mem_read(..3).unwrap().len(), 3);
+    ///
+    /// // From the 3rd member to the end [3..[
+    /// assert_eq!(emu.mem_read(3..).unwrap().len(), 4093);
+    ///
+    /// // Partial slice [25..37]
+    /// assert_eq!(emu.mem_read(25..37).unwrap().len(), 12);
     /// ```
     ///
     fn mem_read<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(
@@ -144,8 +143,8 @@ pub trait Mem {
     ///
     /// Replace the given range with a given slice.
     ///
-    /// If the given slice contains less members than the given range, only the given slice members
-    /// will be inserted into the memory
+    /// If the given slice contains less members than the given range,
+    /// only the given slice members will be inserted into the memory
     ///
     /// # Example
     ///
@@ -156,6 +155,8 @@ pub trait Mem {
     /// let mut emu = Emu::new();
     ///
     /// emu.mem_write(4090..4096, &[3, 4]).unwrap();
+    /// assert_eq!(emu.mem_get(&4090_usize).unwrap(), &3_u8);
+    /// assert_eq!(emu.mem_get(&4091_usize).unwrap(), &4_u8);
     /// ```
     ///
     fn mem_write<T: RangeBounds<usize> + SliceIndex<[u8]> + Clone>(

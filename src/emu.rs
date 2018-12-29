@@ -36,12 +36,25 @@ const REG_SIZE: usize = 16_usize;
 /// ```
 ///
 pub struct Emu {
+    /// Internal memory
     mem: [u8; MEM_SIZE],
+
+    /// CPU registers
     reg: [u8; REG_SIZE],
+
+    /// Memory pointer
     ind: u16,
+
+    /// Program counter
     cnt: u16,
+
+    /// Random generator
     rng: ThreadRng,
+
+    /// Delay timer
     dtm: u8,
+
+    /// Sound timer
     stm: u8,
 }
 
@@ -79,6 +92,7 @@ impl Emu {
     ///
     /// let mut emu = Emu::new();
     ///
+    /// // Clear the display
     /// emu.recv_opcode(&(0x00E0 as u16));
     /// ```
     ///
