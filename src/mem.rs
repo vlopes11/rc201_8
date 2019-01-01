@@ -131,7 +131,7 @@ pub trait Mem {
     ///
     /// // Full memory slice ]..[
     /// assert_eq!(emu.mem_read(..).unwrap().len(), 4096);
-    /// 
+    ///
     /// // First 3 members [0-2]
     /// assert_eq!(emu.mem_read(..3).unwrap().len(), 3);
     ///
