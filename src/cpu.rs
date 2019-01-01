@@ -1,8 +1,24 @@
 use std::fmt;
 
+///
+/// Encapsulation of cpu interactions
+///
 pub trait Cpu {
     ///
     /// Receive an operation code and process it
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use rc201_8::emu::Emu;
+    /// use rc201_8::cpu::Cpu;
+    /// use rc201_8::display::{Display, DisplayDummy};
+    ///
+    /// let mut emu = Emu::new(DisplayDummy::new());
+    ///
+    /// // Clear the display
+    /// emu.recv_opcode(&(0x00E0 as u16));
+    /// ```
     ///
     fn recv_opcode(&mut self, code: &u16) -> Result<(), CpuError>;
 

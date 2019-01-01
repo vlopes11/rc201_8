@@ -108,21 +108,7 @@ impl<D: Display + Sized> Emu<D> {
 }
 
 impl<D: Display + Sized> Cpu for Emu<D> {
-    ///
     /// Executes an operation from a given code
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use rc201_8::emu::Emu;
-    /// use rc201_8::display::{Display, DisplayDummy};
-    ///
-    /// let mut emu = Emu::new(DisplayDummy::new());
-    ///
-    /// // Clear the display
-    /// emu.recv_opcode(&(0x00E0 as u16));
-    /// ```
-    ///
     fn recv_opcode(&mut self, code: &u16) -> Result<(), CpuError> {
         match Oper::from_code(code, &REG_SIZE) {
             OperCode::Display00E0 => {
@@ -337,7 +323,7 @@ impl<D: Display + Sized> Cpu for Emu<D> {
                 }
                 Ok(())
             }
-            OperCode::Unknown => Ok(()),
+            OperCode::Unknown => Err(CpuError::new(CpuErrorVariant::InvalidOperationCode(*code))),
         }
     }
 
