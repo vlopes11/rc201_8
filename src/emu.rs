@@ -1,3 +1,4 @@
+use crate::cpu::{Cpu, CpuError, CpuErrorVariant};
 use crate::display::{Display, DisplayDrawResult, DisplayEmu};
 use crate::keypad::{Key, Keypad};
 use crate::mem::{Mem, MemError, MemErrorVariant};
@@ -104,21 +105,9 @@ impl<D: Display + Sized> Emu<D> {
             dsp: display,
         }
     }
+}
 
-    ///
-    /// Set the VF register to a given value
-    ///
-    fn set_reg_vf(&mut self, vf: u8) {
-        self.reg[REG_SIZE - 1] = vf;
-    }
-
-    ///
-    /// Skip next program instruction
-    ///
-    fn skip_next_instruction(&mut self) {
-        self.cnt = self.cnt + PRG_INCR;
-    }
-
+impl<D: Display + Sized> Cpu for Emu<D> {
     ///
     /// Executes an operation from a given code
     ///
@@ -134,161 +123,305 @@ impl<D: Display + Sized> Emu<D> {
     /// emu.recv_opcode(&(0x00E0 as u16));
     /// ```
     ///
-    pub fn recv_opcode(&mut self, code: &u16) {
+    fn recv_opcode(&mut self, code: &u16) -> Result<(), CpuError> {
         match Oper::from_code(code, &REG_SIZE) {
             OperCode::Display00E0 => {
                 self.dsp.clear();
+                Ok(())
             }
             OperCode::Flow00EE => {
-                // TODO - Catch stack underflow
-                self.spt = self.spt - 1;
-                self.cnt = self.stk[self.spt];
+                self.cnt = self.stk_pop().unwrap();
+                Ok(())
             }
             OperCode::Flow1NNN(v) => {
                 self.cnt = v;
+                Ok(())
             }
             OperCode::Flow2NNN(n) => {
-                // TODO - Catch stack overflow
-                self.stk[self.spt] = self.cnt;
-                self.spt = self.spt + 1;
+                self.stk_push(n).unwrap();
                 self.cnt = n;
+                Ok(())
             }
             OperCode::Cond3XNN(x, n) => {
-                // TODO - Create a cpu mod and encapsulate register access
-                if self.reg[x] == n {
+                if self.reg_get(&x).unwrap() == n {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::Cond4XNN(x, n) => {
-                if self.reg[x] != n {
+                if self.reg_get(&x).unwrap() != n {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::Cond5XY0(x, y) => {
-                if self.reg[x] == self.reg[y] {
+                if self.reg_get(&x).unwrap() == self.reg_get(&y).unwrap() {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::Const6XNN(x, v) => {
-                self.reg[x] = v;
+                self.reg_put(&x, v).unwrap();
+                Ok(())
             }
             OperCode::Const7XNN(x, v) => {
-                self.reg[x] = self.reg[x] + v;
+                let vx = self.reg_get(&x).unwrap();
+                self.reg_put(&x, vx + v).unwrap();
+                Ok(())
             }
             OperCode::Assign8XY0(x, y) => {
-                self.reg[x] = self.reg[y];
+                let vy = self.reg_get(&y).unwrap();
+                self.reg_put(&x, vy).unwrap();
+                Ok(())
             }
             OperCode::BitOp8XY1(x, y) => {
-                self.reg[x] = self.reg[x] | self.reg[y];
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
+                self.reg_put(&x, vx | vy).unwrap();
+                Ok(())
             }
             OperCode::BitOp8XY2(x, y) => {
-                self.reg[x] = self.reg[x] & self.reg[y];
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
+                self.reg_put(&x, vx & vy).unwrap();
+                Ok(())
             }
             OperCode::BitOp8XY3(x, y) => {
-                self.reg[x] = self.reg[x] ^ self.reg[y];
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
+                self.reg_put(&x, vx ^ vy).unwrap();
+                Ok(())
             }
             OperCode::Math8XY4(x, y) => {
-                let sum = self.reg[x] + self.reg[y];
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
+                let sum = vx + vy;
                 let vf = if (sum as u16) > 0xFF { 1 } else { 0 };
-                self.set_reg_vf(vf);
-                self.reg[x] = sum;
+                self.reg_put_vf(vf);
+                self.reg_put(&x, sum).unwrap();
+                Ok(())
             }
             OperCode::Math8XY5(x, y) => {
-                let (vx, vy) = (self.reg[x], self.reg[y]);
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
                 let dif: i8 = vx as i8 - vy as i8;
-                self.reg[x] = dif as u8;
+                self.reg_put(&x, dif as u8).unwrap();
                 let vf = if dif < 0 { 1 } else { 0 };
-                self.set_reg_vf(vf);
+                self.reg_put_vf(vf);
+                Ok(())
             }
             OperCode::BitOp8XY6(x, _) => {
-                let vf = self.reg[x] & 0x1;
-                self.set_reg_vf(vf);
-                self.reg[x] >>= 1;
+                let mut vx = self.reg_get(&x).unwrap();
+                let vf = vx & 0x1;
+                self.reg_put_vf(vf);
+                vx >>= 1;
+                self.reg_put(&x, vx).unwrap();
+                Ok(())
             }
             OperCode::Math8XY7(x, y) => {
-                let (vx, vy) = (self.reg[x], self.reg[y]);
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
                 let dif: i8 = vy as i8 - vx as i8;
-                self.reg[x] = dif as u8;
+                self.reg_put(&x, dif as u8).unwrap();
                 let vf = if dif < 0 { 1 } else { 0 };
-                self.set_reg_vf(vf);
+                self.reg_put_vf(vf);
+                Ok(())
             }
             OperCode::BitOp8XYE(x, _) => {
-                let vf = self.reg[x] & 0x80;
-                self.set_reg_vf(vf);
-                self.reg[x] <<= 1;
+                let mut vx = self.reg_get(&x).unwrap();
+                let vf = vx & 0x80;
+                self.reg_put_vf(vf);
+                vx <<= 1;
+                self.reg_put(&x, vx).unwrap();
+                Ok(())
             }
             OperCode::Cond9XY0(x, y) => {
-                if self.reg[x] != self.reg[y] {
+                let vx = self.reg_get(&x).unwrap();
+                let vy = self.reg_get(&y).unwrap();
+                if vx != vy {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::MemANNN(v) => {
                 self.ind = v as usize;
+                Ok(())
             }
             OperCode::FlowBNNN(v) => {
-                self.cnt = v + self.reg[0] as u16;
+                let v0 = self.reg_get(&0).unwrap() as u16;
+                self.cnt = v + v0;
+                Ok(())
             }
             OperCode::RandCXNN(x, v) => {
                 let r: u8 = self.rng.gen_range(0, 255);
-                self.reg[x] = r & v;
+                self.reg_put(&x, r & v).unwrap();
+                Ok(())
             }
             OperCode::DisplayDXYN(x, y, height) => {
                 let vf = match self.dsp.draw(&x, &y, &height) {
                     DisplayDrawResult::Collision => 1,
                     DisplayDrawResult::Free => 0,
                 };
-                self.set_reg_vf(vf);
+                self.reg_put_vf(vf);
+                Ok(())
             }
             OperCode::KeyOpEX9E(x) => {
-                let key = self.key_from_u8(&self.reg[x]);
+                let vx = self.reg_get(&x).unwrap();
+                let key = self.key_from_u8(&vx);
                 if self.key_pressed(&key) {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::KeyOpEXA1(x) => {
-                let key = self.key_from_u8(&self.reg[x]);
+                let vx = self.reg_get(&x).unwrap();
+                let key = self.key_from_u8(&vx);
                 if !self.key_pressed(&key) {
                     self.skip_next_instruction();
                 }
+                Ok(())
             }
             OperCode::TimerFX07(x) => {
-                self.reg[x] = self.dtm;
+                self.reg_put(&x, self.dtm).unwrap();
+                Ok(())
             }
-            OperCode::KeyOpFX0A(x) => match self.any_key_pressed() {
-                Some(k) => self.reg[x] = self.key_to_u8(&k),
-                None => self.cnt = self.cnt - PRG_INCR,
-            },
+            OperCode::KeyOpFX0A(x) => {
+                match self.any_key_pressed() {
+                    Some(k) => self.reg_put(&x, self.key_to_u8(&k)).unwrap(),
+                    None => self.cnt = self.cnt - PRG_INCR,
+                }
+                Ok(())
+            }
             OperCode::TimerFX15(x) => {
-                self.dtm = self.reg[x];
+                let vx = self.reg_get(&x).unwrap();
+                self.dtm = vx;
+                Ok(())
             }
             OperCode::SoundFX18(x) => {
-                self.stm = self.reg[x];
+                let vx = self.reg_get(&x).unwrap();
+                self.stm = vx;
+                Ok(())
             }
             OperCode::MemFX1E(x) => {
-                self.ind = self.ind + self.reg[x] as usize;
+                let vx = self.reg_get(&x).unwrap() as usize;
+                self.ind = self.ind + vx;
+                Ok(())
             }
             OperCode::MemFX29(x) => {
-                self.ind = self.reg[x] as usize * 5;
+                let vx = self.reg_get(&x).unwrap() as usize;
+                self.ind = vx * 5;
+                Ok(())
             }
             OperCode::BcdFX33(x) => {
-                let (i, v) = (self.ind, self.reg[x]);
-                self.mem_put(&i, v / 100).unwrap();
-                self.mem_put(&(i + 1), (v / 10) % 10).unwrap();
-                self.mem_put(&(i + 2), (v % 100) % 10).unwrap();
+                let vx = self.reg_get(&x).unwrap();
+                let ind = self.ind;
+                self.mem_put(&ind, vx / 100).unwrap();
+                self.mem_put(&(ind + 1), (vx / 10) % 10).unwrap();
+                self.mem_put(&(ind + 2), (vx % 100) % 10).unwrap();
+                Ok(())
             }
             OperCode::MemFX55(x) => {
-                for i in 0..((self.reg[x] + 1) as usize) {
-                    self.mem_put(&(self.ind + i), self.reg[i]).unwrap()
+                let vx = self.reg_get(&x).unwrap();
+                let mi = (vx + 1) as usize;
+                for i in 0..mi {
+                    let vi = self.reg_get(&i).unwrap();
+                    self.mem_put(&(self.ind + i), vi).unwrap()
                 }
+                Ok(())
             }
             OperCode::MemFX65(x) => {
-                let vx = self.reg[x];
+                let vx = self.reg_get(&x).unwrap();
                 for i in 0..((vx + 1) as usize) {
-                    self.reg[i] = self.mem_get(&(self.ind + i)).unwrap().clone();
+                    let v = self.mem_get(&(self.ind + i)).unwrap().clone();
+                    self.reg_put(&i, v).unwrap();
                 }
+                Ok(())
             }
-            OperCode::Unknown => {}
+            OperCode::Unknown => Ok(()),
         }
+    }
+
+    /// Skip next processing instruction
+    fn skip_next_instruction(&mut self) {
+        self.cnt = self.cnt + PRG_INCR;
+    }
+
+    ///
+    /// Validate register index
+    ///
+    fn validate_register_index(&self, index: &usize) -> bool {
+        index < &REG_SIZE
+    }
+
+    /// Return the value for a register
+    fn reg_get(&self, index: &usize) -> Result<u8, CpuError> {
+        if self.validate_register_index(index) {
+            Ok(self.reg[*index])
+        } else {
+            Err(CpuError::new(CpuErrorVariant::InvalidRegisterIndex(*index)))
+        }
+    }
+
+    /// Put the value on a register
+    fn reg_put(&mut self, index: &usize, value: u8) -> Result<(), CpuError> {
+        if self.validate_register_index(index) {
+            self.reg[*index] = value;
+            Ok(())
+        } else {
+            Err(CpuError::new(CpuErrorVariant::InvalidRegisterIndex(*index)))
+        }
+    }
+
+    /// Put the value on the last register
+    fn reg_put_vf(&mut self, value: u8) {
+        self.reg[REG_SIZE - 1] = value;
+    }
+
+    /// Return the stack pointer
+    fn spt_get(&self) -> usize {
+        self.spt
+    }
+
+    /// Validate a given stack pointer
+    fn spt_validate(&self, spt: &usize) -> Result<usize, CpuError> {
+        if spt < &STK_SIZE {
+            Ok(*spt)
+        } else {
+            Err(CpuError::new(CpuErrorVariant::StackOverflow(*spt)))
+        }
+    }
+
+    /// Increment the stack pointer
+    fn spt_inc(&mut self) -> Result<usize, CpuError> {
+        let spt = self.spt_validate(&(self.spt_get() + 1)).unwrap();
+        self.spt = spt;
+        Ok(self.spt)
+    }
+
+    /// Decrement the stack pointer
+    fn spt_dec(&mut self) -> Result<usize, CpuError> {
+        let spt = self.spt_validate(&(self.spt_get() - 1)).unwrap();
+        self.spt = spt;
+        Ok(self.spt)
+    }
+
+    /// Return a stack pointer
+    fn stk_get(&self) -> Result<u16, CpuError> {
+        Ok(self.stk[self.spt_get()])
+    }
+
+    /// Pop the address from the stack
+    fn stk_pop(&mut self) -> Result<u16, CpuError> {
+        let stk = self.stk_get().unwrap();
+        self.spt_dec().unwrap();
+        Ok(stk)
+    }
+
+    /// Push the address on the stack
+    fn stk_push(&mut self, address: u16) -> Result<(), CpuError> {
+        let spt = self.spt_inc().unwrap();
+        self.stk[spt] = address;
+        Ok(())
     }
 }
 
@@ -454,7 +587,7 @@ impl<D: Display + Sized> Keypad for Emu<D> {
     fn key_pressed(&self, key: &Key) -> bool {
         match self.key_to_index(key) {
             Some(i) => self.key[i],
-            None => false
+            None => false,
         }
     }
 
